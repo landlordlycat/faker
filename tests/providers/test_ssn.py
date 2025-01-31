@@ -1,21 +1,23 @@
+import random
 import re
 import unittest
 
 from datetime import datetime
 from itertools import cycle
-from typing import Pattern
+from typing import Pattern, Tuple
 from unittest import mock
 
 import freezegun
 import pytest
-import random2
 
 from validators.i18n.es import es_cif as is_cif
 from validators.i18n.es import es_nie as is_nie
 from validators.i18n.es import es_nif as is_nif
 
-from faker import Faker
+from faker import Factory, Faker
+from faker.providers.ssn.el_GR import tin_checksum as gr_tin_checksum
 from faker.providers.ssn.en_CA import checksum as ca_checksum
+from faker.providers.ssn.es_CL import rut_check_digit as cl_rut_checksum
 from faker.providers.ssn.es_CO import nit_check_digit
 from faker.providers.ssn.es_MX import curp_checksum as mx_curp_checksum
 from faker.providers.ssn.es_MX import ssn_checksum as mx_ssn_checksum
@@ -24,6 +26,7 @@ from faker.providers.ssn.fi_FI import Provider as fi_Provider
 from faker.providers.ssn.fr_FR import calculate_checksum as fr_calculate_checksum
 from faker.providers.ssn.hr_HR import checksum as hr_checksum
 from faker.providers.ssn.it_IT import checksum as it_checksum
+from faker.providers.ssn.lv_LV import Provider as lv_Provider
 from faker.providers.ssn.no_NO import Provider as no_Provider
 from faker.providers.ssn.no_NO import checksum as no_checksum
 from faker.providers.ssn.pl_PL import calculate_month as pl_calculate_mouth
@@ -31,6 +34,8 @@ from faker.providers.ssn.pl_PL import checksum as pl_checksum
 from faker.providers.ssn.pt_BR import checksum as pt_checksum
 from faker.providers.ssn.ro_RO import ssn_checksum as ro_ssn_checksum
 from faker.providers.ssn.ro_RO import vat_checksum as ro_vat_checksum
+from faker.providers.ssn.uk_UA import Provider as uk_Provider
+from faker.providers.ssn.zh_TW import checksum as tw_checksum
 from faker.utils.checksums import luhn_checksum
 
 
@@ -196,6 +201,51 @@ class TestDeAT(unittest.TestCase):
         for _ in range(100):
             assert re.search(r"^ATU\d{8}$", self.fake.vat_id())
 
+    def test_ssn(self):
+        for _ in range(100):
+            ssn: str = self.fake.ssn()
+            assert len(ssn) == 10
+            assert len(self.fake.ssn(self.fake.date_of_birth())) == 10
+
+    def test_ssn_checkdigit(self):
+        for _ in range(100):
+            ssn: str = self.fake.ssn()
+            ssn_digits: list[int] = [int(char) for char in ssn[:3] + ssn[4:]]
+            factors: list[int] = [3, 7, 9, 5, 8, 4, 2, 1, 6]
+            sum: int = 0
+            for index, digit in enumerate(ssn_digits):
+                sum += digit * factors[index]
+            assert sum % 11 == int(ssn[3])
+
+
+class TestDeDe(unittest.TestCase):
+    def setUp(self):
+        self.fake = Faker("de_DE")
+        self.rvnr_pattern: Pattern = re.compile(r"\d{8}[A-Z]\d{3}")
+        self.kvnr_pattern: Pattern = re.compile(r"[A-Z]\d{19}")
+        Faker.seed(0)
+
+    def test_vat_id(self):
+        for _ in range(100):
+            assert re.search(r"^DE\d{9}$", self.fake.vat_id())
+
+    def test_rvnr(self):
+        for _ in range(100):
+            rvnr = self.fake.rvnr()
+            assert self.rvnr_pattern.fullmatch(rvnr)
+
+    def test_rvnr_birthdate(self):
+        for _ in range(100):
+            birthdate: datetime.date = self.fake.date_object()
+            rvnr = self.fake.rvnr(birthdate)
+            assert self.rvnr_pattern.fullmatch(rvnr)
+            assert rvnr[2:8] == birthdate.strftime("%d%m%y")
+
+    def test_kvnr(self):
+        for _ in range(100):
+            kvnr = self.fake.kvnr()
+            assert self.kvnr_pattern.fullmatch(kvnr)
+
 
 class TestElCY(unittest.TestCase):
     def setUp(self):
@@ -214,11 +264,29 @@ class TestElGr(unittest.TestCase):
 
     def test_vat_id(self):
         for _ in range(100):
-            assert re.search(r"^EL\d{9}$", self.fake.vat_id())
+            prefix = random.choice([True, False])
+            vat_id = self.fake.vat_id(prefix=prefix)
+            assert re.search(r"^(EL)?\d{9}$", vat_id)
+            assert vat_id[2 if prefix else 0] in ("7", "8", "9", "0")
+            assert str(gr_tin_checksum(vat_id[2:-1] if prefix else vat_id[:-1])) == vat_id[-1]
+
+    def test_tin(self):
+        for _ in range(100):
+            tin = self.fake.tin()
+            assert re.search(r"^\d{9}$", tin)
+            assert tin[0] in ("1", "2", "3", "4")
+            assert str(gr_tin_checksum(tin[:-1])) == tin[-1]
+
+    def test_ssn(self):
+        for _ in range(100):
+            ssn = self.fake.ssn()
+            assert re.search(r"^\d{11}$", ssn)
+            assert datetime.strptime(ssn[:6], "%d%m%y")
+            assert luhn_checksum(ssn) == 0
 
     def test_police_id(self):
         for _ in range(100):
-            assert re.search(r"^[ΑΒΓΔΕΖΗΘΙΚΛΜΝΞΟΠΡΣΤΥΦΧΨΩ]{1,2} ?\d{6}$", self.fake.police_id())
+            assert re.search(r"^[ΑΒΕΖΗΙΚΜΝΟΡΤΥΧ]{1,2}\d{6}$", self.fake.police_id())
 
 
 class TestEnCA(unittest.TestCase):
@@ -279,7 +347,6 @@ class TestEnUS(unittest.TestCase):
             assert area != "666"
 
     def test_invalid_ssn(self):
-        self.fake.random = random2.Random()
         # Magic Numbers below generate '666-92-7944', '000-54-2963', '956-GG-9478', '436-00-1386',
         # and 134-76-0000 respectively. The "group" (GG) returned for '956-GG-9478 will be a random
         # number, and that random number is not in the "itin_group_numbers" List. The random GG occurs
@@ -341,7 +408,7 @@ class TestEnUS(unittest.TestCase):
             99,
         ]
 
-        self.fake.seed_instance(1143)
+        self.fake.seed_instance(2432)
         ssn = self.fake.ssn(taxpayer_identification_number_type="INVALID_SSN")
 
         assert len(ssn) == 11
@@ -359,7 +426,7 @@ class TestEnUS(unittest.TestCase):
 
         assert 900 <= int(area) <= 999 and int(group) not in itin_group_numbers
 
-        self.fake.seed_instance(9)
+        self.fake.seed_instance(0)
         ssn = self.fake.ssn(taxpayer_identification_number_type="INVALID_SSN")
         [area, group, serial] = ssn.split("-")
 
@@ -602,6 +669,16 @@ class TestEsES(unittest.TestCase):
     def test_doi(self):
         assert len(self.fake.doi()) == 9
 
+    def test_nuss(self):
+        for _ in range(50):
+            nuss = self.fake.nuss()
+            assert isinstance(nuss, str)
+            assert 12 == len(nuss)
+        for _ in range(50):
+            nuss = self.fake.nuss(company=True)
+            assert isinstance(nuss, str)
+            assert 11 == len(nuss)
+
 
 class TestEsCA(TestEsES):
     def setUp(self):
@@ -609,8 +686,8 @@ class TestEsCA(TestEsES):
         Faker.seed(0)
 
 
-class TestEsMX(unittest.TestCase):
-    def setUp(self):
+class TestEsMX:
+    def setup_method(self):
         self.fake = Faker("es_MX")
         Faker.seed(0)
 
@@ -644,12 +721,56 @@ class TestEsMX(unittest.TestCase):
             assert len(rfc) == 12
             assert re.search(r"^[A-Z]{3}\d{6}[0-9A-Z]{3}$", rfc)
 
+    @pytest.mark.parametrize(
+        "gender,pattern",
+        [
+            ("M", r"^[A-Z]{6}\d{8}M\d{3}$"),
+            ("H", r"^[A-Z]{6}\d{8}H\d{3}$"),
+            (None, r"^[A-Z]{6}\d{8}[HM]\d{3}$"),
+        ],
+        ids=["woman", "man", "any"],
+    )
+    def test_elector_code(self, gender, pattern):
+        for _ in range(100):
+            elector_code = self.fake.elector_code(gender=gender)
+
+            assert len(elector_code) == 18
+            assert re.search(pattern, elector_code)
+
+    def test_elector_code_unsupported_gender(self):
+        with pytest.raises(ValueError, match="Gender must be"):
+            self.fake.elector_code("Z")
+
+
+class TestEsCL(unittest.TestCase):
+    def setUp(self):
+        self.fake = Faker("es_CL")
+        Faker.seed(0)
+
+    def test_rut(self):
+        for _ in range(100):
+            rut = self.fake.rut(min=10000000)
+            digits, check_digit = self._extract_digits(rut)
+
+            assert len(rut) == 12
+            assert check_digit == cl_rut_checksum(digits)
+
+    @staticmethod
+    def _extract_digits(rut) -> Tuple[int, str]:
+        """Extracts the digits and check digit from a formatted RUT."""
+        char_filter = re.compile(r"[^0-9]")
+        check_digit = rut[-1]
+        digits = char_filter.sub("", rut[:-1])
+
+        return int(digits), check_digit
+
 
 class TestEtEE(unittest.TestCase):
     """Tests SSN in the et_EE locale"""
 
     def setUp(self):
         self.fake = Faker("et_EE")
+
         Faker.seed(0)
 
     def test_ssn_checksum(self):
@@ -660,14 +781,12 @@ class TestEtEE(unittest.TestCase):
 
     @freezegun.freeze_time("2019-03-11")
     def test_ssn(self):
-        self.fake.random = random2.Random()
-
-        self.fake.seed_instance(0)
+        self.fake.seed_instance(1)
         value = self.fake.ssn()
         assert re.search(r"^\d{11}$", value)
         assert not value.endswith("0")
 
-        self.fake.seed_instance(5)
+        self.fake.seed_instance(0)
         value = self.fake.ssn()
 
         assert re.search(r"^\d{11}$", value)
@@ -675,8 +794,6 @@ class TestEtEE(unittest.TestCase):
 
     @freezegun.freeze_time("2002-01-01")
     def test_ssn_2000(self):
-        self.fake.random = random2.Random()
-
         self.fake.seed_instance(0)
         value = self.fake.ssn(min_age=0, max_age=1)
         assert re.search(r"^\d{11}$", value)
@@ -684,8 +801,6 @@ class TestEtEE(unittest.TestCase):
 
     @freezegun.freeze_time("2101-01-01")
     def test_ssn_2100(self):
-        self.fake.random = random2.Random()
-
         self.fake.seed_instance(0)
         value = self.fake.ssn(min_age=0, max_age=1)
         assert re.search(r"^\d{11}$", value)
@@ -733,6 +848,19 @@ class TestFiFI(unittest.TestCase):
     def test_vat_id(self):
         for _ in range(100):
             assert re.search(r"^FI\d{8}$", self.fake.vat_id())
+
+    @freezegun.freeze_time("2023-10-23")
+    def test_ssn_without_age_range(self):
+        current_year = 2023
+        age = current_year - 1995
+        ssn = self.fake.ssn(min_age=age, max_age=age, artificial=True)
+        assert "95-" in ssn
+        age = current_year - 2013
+        ssn = self.fake.ssn(min_age=age, max_age=age, artificial=True)
+        assert "13A" in ssn
+        age = current_year - 1898
+        ssn = self.fake.ssn(min_age=age, max_age=age, artificial=True)
+        assert "98+" in ssn
 
 
 class TestFrFR(unittest.TestCase):
@@ -866,6 +994,13 @@ class TestItIT(unittest.TestCase):
 
     def test_checksum(self) -> None:
         assert it_checksum("MDDMRA80L41H501") == "R"
+
+    def test_ssn_with_latin_chars(self):
+        generator = Factory.create("it_IT")
+        generator.last_name = mock.MagicMock(return_value="Foà")
+        ssn = generator.ssn()
+        self.assertEqual(len(ssn), 16)
+        self.assertEqual(ssn[:3], "FOA")
 
 
 class TestPtBR(unittest.TestCase):
@@ -1140,6 +1275,33 @@ class TestZhCN(unittest.TestCase):
         ssn = self.fake.ssn(gender="M")
         assert int(ssn[16]) % 2 == 1
 
+    def test_zh_CN_ssn_invalid_area_code_passed(self):
+        ssn = self.fake.ssn(area_code=12)
+        assert int(ssn[0:6]) > 0
+
+        ssn = self.fake.ssn(area_code={})
+        assert int(ssn[0:6]) > 0
+
+        ssn = self.fake.ssn(area_code=[])
+        assert int(ssn[0:6]) > 0
+
+        ssn = self.fake.ssn(area_code=None)
+        assert int(ssn[0:6]) > 0
+
+        ssn = self.fake.ssn()
+        assert int(ssn[0:6]) > 0
+
+    def test_zh_CN_ssn_area_code_passed(self):
+        #
+        ssn = self.fake.ssn(area_code="654225")
+        assert int(ssn[0:6]) == 654225
+
+        ssn = self.fake.ssn(area_code="820000")
+        assert int(ssn[0:6]) == 820000
+
+        ssn = self.fake.ssn(area_code="830000")
+        assert int(ssn[0:6]) == 830000
+
 
 class TestRoRO(unittest.TestCase):
     """Tests SSN in the ro_RO locale"""
@@ -1192,3 +1354,86 @@ class TestAzAz(unittest.TestCase):
     def check_length(self):
         for sample in self.samples:
             assert len(sample) == 7
+
+
+class TestLvLV(unittest.TestCase):
+    num_sample_runs = 10
+
+    def setUp(self):
+        self.fake = Faker("lv_LV")
+        Faker.seed(0)
+        self.samples = [self.fake.ssn() for _ in range(self.num_sample_runs)]
+        self.provider = lv_Provider
+
+    def test_century_code(self):
+        assert self.provider._get_century_code(1900) == 1
+        assert self.provider._get_century_code(1999) == 1
+        assert self.provider._get_century_code(2000) == 2
+        assert self.provider._get_century_code(2999) == 2
+        assert self.provider._get_century_code(1800) == 0
+        assert self.provider._get_century_code(1899) == 0
+        with pytest.raises(ValueError):
+            self.provider._get_century_code(1799)
+        with pytest.raises(ValueError):
+            self.provider._get_century_code(3000)
+
+    def test_ssn_sanity(self):
+        for age in range(100):
+            self.fake.ssn(min_age=age, max_age=age + 1)
+
+    def check_length(self):
+        for sample in self.samples:
+            assert len(sample) == 12
+
+    def test_vat_id(self):
+        for _ in range(100):
+            assert re.search(r"^LV\d{11}$", self.fake.vat_id())
+
+
+class TestZhTW(unittest.TestCase):
+    num_sample_runs = 10
+
+    def setUp(self):
+        self.fake = Faker("zh_TW")
+        Faker.seed(0)
+        self.samples = [self.fake.ssn() for _ in range(self.num_sample_runs)]
+
+    def test_length(self):
+        for sample in self.samples:
+            assert len(sample) == 10
+
+    def test_gender(self):
+        """only '1' and '2' are allowed in the second char"""
+        for sample in self.samples:
+            assert sample[1] == "1" or sample[1] == "2"
+
+    def test_checksum(self):
+        for sample in self.samples:
+            assert tw_checksum(sample) % 10 == 0
+
+
+class TestUkUA(unittest.TestCase):
+    def setUp(self):
+        self.fake = Faker("uk_Ua")
+        Faker.seed(0)
+        self.provider = uk_Provider
+
+    def test_ssn_len(self):
+        assert len(self.fake.ssn()) == 10
+
+    def test_start_ssn(self):
+        assert self.fake.ssn("21-06-1994")[:5] == "34505"
+
+    def test_ssn_gender(self):
+        m = self.fake.ssn(gender="M")
+        w = self.fake.ssn(gender="F")
+        assert int(m[8]) % 2 != 0, "Must be odd for men"
+        assert int(w[8]) % 2 == 0, "Must be even for women"
+
+    def test_incorrect_birthday(self):
+        with pytest.raises(ValueError):
+            self.fake.ssn(birthday="1994-06-01")
+
+    def test_incorrect_gender(self):
+        with pytest.raises(ValueError):
+            self.fake.ssn(gender="f")

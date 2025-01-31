@@ -1,4 +1,5 @@
 import csv
+import datetime
 import io
 import itertools
 import json
@@ -6,12 +7,18 @@ import re
 import tarfile
 import unittest
 import uuid
+import xml
 import zipfile
 
 try:
     import PIL.Image
 except ImportError:
     PIL = None
+
+try:
+    import xmltodict
+except ImportError:
+    xmltodict = None
 
 from typing import Pattern
 from unittest.mock import patch
@@ -50,6 +57,9 @@ class _FooBarProvider:
 
     def test_float(self, multi=1) -> float:
         return 1.1 * multi
+
+    def test_date_time(self) -> datetime.datetime:
+        return datetime.datetime(2022, 12, 22, 13, 42, 33, 123)
 
 
 class TestMiscProvider:
@@ -413,7 +423,7 @@ class TestMiscProvider:
     def test_dsv_data_columns(self, faker):
         num_rows = 10
         data_columns = ["{{name}}", "#??-####", "{{address}}", "{{phone_number}}"]
-        with patch.object(faker["en_US"], "pystr_format") as mock_pystr_format:
+        with patch.object(faker["en_US"].factories[0], "pystr_format") as mock_pystr_format:
             mock_pystr_format.assert_not_called()
             faker.dsv(data_columns=data_columns, num_rows=num_rows)
 
@@ -450,6 +460,20 @@ class TestMiscProvider:
             # Verify csv.writer was called with the remaining kwargs
             for args, kwargs in mock_writer.call_args_list:
                 assert kwargs == test_kwargs
+
+    @unittest.skipUnless(xmltodict, "requires the Python xmltodict Library")
+    def test_xml(self, faker):
+        try:
+            xml.etree.ElementTree.fromstring(faker.xml())
+        except xml.etree.ElementTree.ParseError:
+            raise AssertionError("The XML format is invalid.")
+
+    def test_xml_no_xmltodict(self, faker):
+        with patch.dict("sys.modules", {"xmltodict": None}):
+            with pytest.raises(exceptions.UnsupportedFeature) as excinfo:
+                faker.xml()
+
+            assert excinfo.value.name == "xml"
 
     def test_csv_helper_method(self, faker):
         kwargs = {
@@ -669,6 +693,36 @@ class TestMiscProvider:
 
         assert json_data["dict"]["item1"] == "FooBars"
         assert json_data["dict"]["item2"] == "FooBar"
+
+    def test_json_type_integrity_datetime_using_encoder(self, faker_with_foobar):
+        class DateTimeEncoder(json.JSONEncoder):
+            def default(self, obj):
+                if isinstance(obj, datetime.datetime):
+                    return str(obj)
+
+                # Let the base class default method raise the TypeError
+                return json.JSONEncoder.default(self, obj)
+
+        kwargs = {
+            "data_columns": {"item1": "test_date_time"},
+            "num_rows": 1,
+            "cls": DateTimeEncoder,
+        }
+        json_data = json.loads(faker_with_foobar.json(**kwargs))
+        assert isinstance(json_data["item1"], str)
+        assert json_data["item1"] == "2022-12-22 13:42:33.000123"
+
+    def test_json_type_integrity_datetime_no_encoder(self, faker_with_foobar):
+        kwargs = {"data_columns": {"item1": "test_date_time"}, "num_rows": 1}
+        with pytest.raises(TypeError):
+            faker_with_foobar.json(**kwargs)
+
+    def test_json_bytes(self, faker_with_foobar):
+        kwargs = {"data_columns": {"item1": "foo_bar"}, "num_rows": 1}
+        json_data_bytes = faker_with_foobar.json_bytes(**kwargs)
+        assert isinstance(json_data_bytes, bytes)
+        json_data = json.loads(json_data_bytes.decode())
+        assert json_data["item1"] == "FooBar"
 
     def test_fixed_width_with_arguments(self, faker_with_foobar):
         kwargs = {
