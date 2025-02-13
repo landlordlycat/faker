@@ -4,33 +4,35 @@ on:
   push:
     branches:
       - master
-  pull_request:
-    branches:
-      - master
+  pull_request_target:
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
 
 jobs:
   flake8:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-flake8
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Install dependencies
       run: |
         python -m pip install flake8
     - name: Lint with flake8
-      uses: liskin/gh-problem-matcher-wrap@v1
+      uses: liskin/gh-problem-matcher-wrap@v3
       with:
         linters: flake8
         run: flake8 --extend-ignore=E203 faker tests
@@ -38,17 +40,17 @@ jobs:
   checkmanifest:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-checkmanifest
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Install dependencies
@@ -62,24 +64,24 @@ jobs:
   isort:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-isort
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Install dependencies
       run: |
         python -m pip install isort
     - name: Import order checking with isort
-      uses: liskin/gh-problem-matcher-wrap@v1
+      uses: liskin/gh-problem-matcher-wrap@v3
       with:
         linters: isort
         run: isort --check --diff .
@@ -87,17 +89,17 @@ jobs:
   black:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-black
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Install dependencies
@@ -111,17 +113,17 @@ jobs:
   doc8:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-pep8
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: '3.x'
     - name: Install dependencies
@@ -136,56 +138,67 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        python: [3.6, 3.8, "3.10"]
+        python:
+        - "3.9"
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        - "3.13"
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-typing
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
         python-version: ${{ matrix.python }}
     - name: Install dependencies
       run: |
         python -m pip install mypy
     - name: Static type checking with mypy
-      uses: liskin/gh-problem-matcher-wrap@v1
+      uses: liskin/gh-problem-matcher-wrap@v3
       with:
         linters: mypy
-        run: mypy --show-column-numbers --install-types --non-interactive --config mypy.ini faker
+        run: mypy --install-types --non-interactive --config mypy.ini faker
 
   test_ubuntu:
     runs-on: ubuntu-latest
     needs: [flake8, isort, black, doc8, checkmanifest, typing]
     strategy:
       matrix:
-        python: [3.6, 3.7, 3.8, 3.9, "pypy-3.9"]
+        python:
+        - "3.9"
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        - "3.13"
+        - "pypy-3.10"
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: pipcache
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-test_ubuntu
       - name: Setup Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: Install Tox and any other packages
-        run: python -m pip install tox coveralls
+        run: python -m pip install tox
       - name: pytest
-        uses: liskin/gh-problem-matcher-wrap@v1
+        uses: liskin/gh-problem-matcher-wrap@v3
         with:
           linters: pytest
           run: tox -e py
@@ -194,109 +207,63 @@ jobs:
           COVERALLS_FLAG_NAME: run-ubuntu-${{ matrix.python }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           COVERALLS_SERVICE_NAME: github
-      - name: Publish coverage
-        run: coveralls --service=github
-        env:
-          COVERALLS_PARALLEL: true
-          COVERALLS_FLAG_NAME: run-ubuntu-${{ matrix.python }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_SERVICE_NAME: github
-
+ 
   test_windows:
     runs-on: windows-latest
     needs: [flake8, isort, black, doc8, checkmanifest, typing]
     strategy:
       matrix:
-        python: [3.6, 3.7, 3.8, 3.9]
+        python:
+        - "3.9"
+        - "3.10"
+        - "3.11"
+        - "3.12"
+        - "3.13"
         arch: ["x86", "x64"]
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Setup pip cache
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         id: pipcache
         with:
           path: ~/.cache/pip
-          key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+          key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
           restore-keys: |
             ${{ runner.os }}-pip-test_windows
       - name: Setup Python
-        uses: actions/setup-python@v3
+        uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python }}
       - name: Install Tox and any other packages
-        run: python -m pip install tox coveralls
+        run: python -m pip install tox
       - name: Run Tox
         # Run tox using the version of Python in `PATH`
         run: tox -e py
-      - name: Publish coverage
-        run: coveralls --service=github
-        env:
-          COVERALLS_PARALLEL: true
-          COVERALLS_FLAG_NAME: run-ubuntu-${{ matrix.python }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          COVERALLS_SERVICE_NAME: github
 
   test_alpine:
     runs-on: ubuntu-latest
     needs: [flake8, isort, black, doc8, checkmanifest, typing]
 
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Setup pip cache
-      uses: actions/cache@v3
+      uses: actions/cache@v4
       id: pipcache
       with:
         path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+        key: ${{ runner.os }}-pip-${{ hashFiles('setup.py') }}
         restore-keys: |
           ${{ runner.os }}-pip-test_alpine
     - name: Set up Python
-      uses: actions/setup-python@v3
+      uses: actions/setup-python@v5
       with:
-        python-version: '3.x'
+        python-version: '3.12'
     - name: Install dependencies
       run: |
-        python -m pip install tox
+        python -m pip install tox==3.27.1 setuptools
     - name: Run tests
       run: tox
       env:
         TOXENV: alpine
         TEST_ALPINE: 1
-
-  test_32bit:
-    runs-on: ubuntu-latest
-    needs: [flake8, isort, black, doc8, checkmanifest, typing]
-
-    steps:
-    - uses: actions/checkout@v3
-    - name: Setup pip cache
-      uses: actions/cache@v3
-      id: pipcache
-      with:
-        path: ~/.cache/pip
-        key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
-        restore-keys: |
-          ${{ runner.os }}-pip-test_32bit
-    - name: Set up Python
-      uses: actions/setup-python@v3
-      with:
-        python-version: '3.x'
-    - name: Install dependencies
-      run: |
-        python -m pip install tox
-    - name: Run tests
-      run: tox
-      env:
-        TOXENV: 32bit
-        TEST_32BIT: 1
-
-  finish:
-    needs: [test_ubuntu, test_windows, test_alpine, test_32bit]
-    runs-on: ubuntu-latest
-    steps:
-    - name: Coveralls Finished
-      uses: AndreMiras/coveralls-python-action@develop
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        parallel-finished: true

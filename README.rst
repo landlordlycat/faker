@@ -23,7 +23,7 @@ Compatibility
 -------------
 
 Starting from version ``4.0.0``, ``Faker`` dropped support for Python 2 and from version ``5.0.0``
-only supports Python 3.6 and above. If you still need Python 2 compatibility, please install version ``3.0.1`` in the
+only supports Python 3.8 and above. If you still need Python 2 compatibility, please install version ``3.0.1`` in the
 meantime, and please consider updating your codebase to support Python 3 so you can enjoy the
 latest features ``Faker`` has to offer. Please see the `extended docs`_ for more details, especially
 if you are upgrading from version ``2.0.4`` and below as there might be breaking changes.
@@ -380,9 +380,9 @@ Seeding the Generator
 ---------------------
 
 When using Faker for unit testing, you will often want to generate the same
-data set. For convenience, the generator also provide a ``seed()`` method,
-which seeds the shared random number generator. Calling the same methods with
-the same version of faker and seed produces the same results.
+data set. For convenience, the generator also provides a ``seed()`` method,
+which seeds the shared random number generator. A Seed produces the same result
+when the same methods with the same version of faker are called.
 
 .. code:: python
 
@@ -393,8 +393,8 @@ the same version of faker and seed produces the same results.
     print(fake.name())
     # 'Margaret Boehm'
 
-Each generator can also be switched to its own instance of ``random.Random``,
-separate to the shared one, by using the ``seed_instance()`` method, which acts
+Each generator can also be switched to use its own instance of ``random.Random``,
+separated from the shared one, by using the ``seed_instance()`` method, which acts
 the same way. For example:
 
 .. code:: python
@@ -422,11 +422,17 @@ Run tests:
 
     $ tox
 
-Write documentation for providers:
+Write documentation for the providers of the default locale:
 
 .. code:: bash
 
     $ python -m faker > docs.txt
+
+Write documentation for the providers of a specific locale:
+
+.. code:: bash
+
+    $ python -m faker --lang=de_DE > docs_de.txt
 
 
 Contribute
@@ -472,9 +478,9 @@ Credits
     :target: https://coveralls.io/r/joke2k/faker?branch=master
     :alt: Test coverage
 
-.. |build| image:: https://github.com/joke2k/faker/workflows/Python%20Tests/badge.svg?branch=master&event=push
-    :target: https://github.com/joke2k/faker/actions?query=workflow%3A%22Python+Tests%22+branch%3Amaster+event%3Apush
-    :alt: Build status of the master branch on Mac/Linux
+.. |build| image:: https://github.com/joke2k/faker/actions/workflows/ci.yml/badge.svg
+    :target: https://github.com/joke2k/faker/actions/workflows/ci.yml
+    :alt: Build status of the master branch
 
 .. |license| image:: https://img.shields.io/badge/license-MIT-blue.svg?style=flat-square
     :target: https://raw.githubusercontent.com/joke2k/faker/master/LICENSE.txt

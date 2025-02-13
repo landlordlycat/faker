@@ -1,6 +1,9 @@
 test:
 	tox -e py
 
+flake8:
+	flake8 --extend-ignore=E203 faker tests
+
 mypy:
 	mypy --install-types --non-interactive --config mypy.ini faker
 
@@ -10,7 +13,10 @@ black:
 isort:
 	isort --atomic .
 
-lint: isort black mypy
+generate-stubs: 
+	python3.11 generate_stubs.py
+
+lint: generate-stubs isort black mypy flake8
 
 release:
 	check-manifest
